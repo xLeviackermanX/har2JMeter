@@ -12,7 +12,7 @@ repositories {
 
 dependencies {
     implementation('org.codehaus.groovy:groovy-all:2.4.15')
-    compile('commons-cli:commons-cli:1.2')
-    testCompile('org.spockframework:spock-core:0.7-groovy-2.0')
-    testCompile('xmlunit:xmlunit:1.4')
+    implementation('commons-cli:commons-cli:1.2')
+    testImplementation('org.spockframework:spock-core:0.7-groovy-2.0')
+    testImplementation('xmlunit:xmlunit:1.4')
 }

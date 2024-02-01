@@ -6,7 +6,11 @@ class JMeterHttpSampler {
 
     String method
 
+    String postData
+
     Map headers = [:]
+
+    Map jsonPPs = [:]
 
     Map arguments = [:]
 
