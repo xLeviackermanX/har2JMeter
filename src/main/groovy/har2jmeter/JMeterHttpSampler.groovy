@@ -31,3 +31,9 @@ class JMeterHttpSampler {
     }
 
 }
+
+class JMeterBlock {
+    String condition
+    // JMeterHttpSampler[] jmeterSamplers;
+    List <JMeterHttpSampler> jmeterSamplers
+}
