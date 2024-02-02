@@ -24,7 +24,7 @@ class Har2JMeter {
             block.entries.each { entry ->
                 try {
                     def request = entry.request
-                    println request
+                    
                     if (request) {
                         URL url = new URL(request.url)
                         JMeterHttpSampler sampler = new JMeterHttpSampler(url: url, method: request.method)
@@ -83,6 +83,8 @@ class Har2JMeter {
     }
 
     def getSamplers(jmeterSamplers) {
+        def writer = new StringWriter()
+        def xml = new MarkupBuilder(writer)
         return jmeterSamplers.each { sampler ->
             HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
                 elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {
@@ -142,7 +144,6 @@ class Har2JMeter {
     def toJmx(jmeterBlocks) {
         def writer = new StringWriter()
         def xml = new MarkupBuilder(writer)
-        jmeterSamplers
         xml.jmeterTestPlan(version: "1.2", properties: "2.4", jmeter: "2.9") {
             hashTree() {
                 TestPlan(guiclass: "TestPlanGui", testclass: "TestPlan", testname: "Testplan", enabled: "true") {
@@ -178,67 +179,118 @@ class Har2JMeter {
                                     boolProp(name: "IfController.useExpression", true)
                                 }
                                 hashTree() {
-                                    getSamplers(block.jmeterSamplers)   
+                                    block.jmeterSamplers.each { sampler ->
+                                        HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
+                                            elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {
+                                                collectionProp(name: "Arguments.arguments") {
+                                                    if(sampler.postData) {
+                                                        elementProp(name: "", elementType: "HTTPArgument") {
+                                                            boolProp(name: "HTTPArgument.always_encode", "false")
+                                                            stringProp(name: "Argument.value", sampler.postData)
+                                                            stringProp(name: "Argument.metadata", "=")
+                                                        }                
+                                                    }     
+                                                }
+                                            }
+                                            stringProp(name: "HTTPSampler.domain", sampler.domain)
+                                            stringProp(name: "HTTPSampler.port", sampler.getPort())
+                                            stringProp(name: "HTTPSampler.connect_timeout", "")
+                                            stringProp(name: "HTTPSampler.response_timeout", "")
+                                            stringProp(name: "HTTPSampler.protocol", sampler.getProtocol())
+                                            stringProp(name: "HTTPSampler.contentEncoding", "")
+                                            stringProp(name: "HTTPSampler.path", sampler.path)
+                                            stringProp(name: "HTTPSampler.method", sampler.method.toUpperCase())
+                                            boolProp(name: "HTTPSampler.follow_redirects", "true")
+                                            boolProp(name: "HTTPSampler.auto_redirects", "false")
+                                            boolProp(name: "HTTPSampler.use_keepalive", "true")
+                                            boolProp(name: "HTTPSampler.DO_MULTIPART_POST", "false")
+                                            boolProp(name: "HTTPSampler.monitor", "false")
+                                            stringProp(name: "HTTPSampler.embedded_url_re", "")
+                                            stringProp(name: "HTTPSampler.implementation", "Java")
+                                        }
+                                        hashTree() {
+                                            if (sampler.jsonPPs) {
+                                                sampler.jsonPPs.each { pp ->
+                                                    JSONPostProcessor(guiclass: "JSONPostProcessorGui", testclass: "JSONPostProcessor", testname: "JSON Extractor", enabled: "true") {
+                                                        stringProp(name: "JSONPostProcessor.referenceNames", pp.key)
+                                                        stringProp(name: "JSONPostProcessor.jsonPathExprs", pp.value)
+                                                    }
+                                                }
+                                                hashTree()
+                                            }
+                                            if (withHttpHeaders && sampler.headers) {
+                                                HeaderManager(guiclass: "HeaderPanel", testclass: "HeaderManager", testname: "HTTP Header Manager", enabled: "true") {
+                                                    collectionProp(name: "HeaderManager.headers") {
+                                                        sampler.headers.each { header ->
+                                                            elementProp(name: "", elementType: "Header") {
+                                                                stringProp(name: "Header.name", header.key)
+                                                                stringProp(name: "Header.value", header.value)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                hashTree()
+                                            }
+                                        }
+                                    }   
                                 }
                             } else {
-                                getSamplers(block.jmeterSamplers)
+                                block.jmeterSamplers.each { sampler ->
+                                    HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
+                                        elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {
+                                            collectionProp(name: "Arguments.arguments") {
+                                                if(sampler.postData) {
+                                                    elementProp(name: "", elementType: "HTTPArgument") {
+                                                        boolProp(name: "HTTPArgument.always_encode", "false")
+                                                        stringProp(name: "Argument.value", sampler.postData)
+                                                        stringProp(name: "Argument.metadata", "=")
+                                                    }                
+                                                }     
+                                            }
+                                        }
+                                        stringProp(name: "HTTPSampler.domain", sampler.domain)
+                                        stringProp(name: "HTTPSampler.port", sampler.getPort())
+                                        stringProp(name: "HTTPSampler.connect_timeout", "")
+                                        stringProp(name: "HTTPSampler.response_timeout", "")
+                                        stringProp(name: "HTTPSampler.protocol", sampler.getProtocol())
+                                        stringProp(name: "HTTPSampler.contentEncoding", "")
+                                        stringProp(name: "HTTPSampler.path", sampler.path)
+                                        stringProp(name: "HTTPSampler.method", sampler.method.toUpperCase())
+                                        boolProp(name: "HTTPSampler.follow_redirects", "true")
+                                        boolProp(name: "HTTPSampler.auto_redirects", "false")
+                                        boolProp(name: "HTTPSampler.use_keepalive", "true")
+                                        boolProp(name: "HTTPSampler.DO_MULTIPART_POST", "false")
+                                        boolProp(name: "HTTPSampler.monitor", "false")
+                                        stringProp(name: "HTTPSampler.embedded_url_re", "")
+                                        stringProp(name: "HTTPSampler.implementation", "Java")
+                                    }
+                                    hashTree() {
+                                        if (sampler.jsonPPs) {
+                                            sampler.jsonPPs.each { pp ->
+                                                JSONPostProcessor(guiclass: "JSONPostProcessorGui", testclass: "JSONPostProcessor", testname: "JSON Extractor", enabled: "true") {
+                                                    stringProp(name: "JSONPostProcessor.referenceNames", pp.key)
+                                                    stringProp(name: "JSONPostProcessor.jsonPathExprs", pp.value)
+                                                }
+                                                hashTree()
+                                            }
+                                        }
+                                        if (withHttpHeaders && sampler.headers) {
+                                            HeaderManager(guiclass: "HeaderPanel", testclass: "HeaderManager", testname: "HTTP Header Manager", enabled: "true") {
+                                                collectionProp(name: "HeaderManager.headers") {
+                                                    sampler.headers.each { header ->
+                                                        elementProp(name: "", elementType: "Header") {
+                                                            stringProp(name: "Header.name", header.key)
+                                                            stringProp(name: "Header.value", header.value)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            hashTree()
+                                        }
+                                    }
+                                }
                             }
                         }
-                        // jmeterSamplers.each { sampler ->
-                        //     HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
-                        //         elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {
-                        //             collectionProp(name: "Arguments.arguments") {
-                        //                 if(sampler.postData) {
-                        //                     elementProp(name: "", elementType: "HTTPArgument") {
-                        //                         boolProp(name: "HTTPArgument.always_encode", "false")
-                        //                         stringProp(name: "Argument.value", sampler.postData)
-                        //                         stringProp(name: "Argument.metadata", "=")
-                        //                     }                
-                        //                 }     
-                        //             }
-                        //         }
-                        //         stringProp(name: "HTTPSampler.domain", sampler.domain)
-                        //         stringProp(name: "HTTPSampler.port", sampler.getPort())
-                        //         stringProp(name: "HTTPSampler.connect_timeout", "")
-                        //         stringProp(name: "HTTPSampler.response_timeout", "")
-                        //         stringProp(name: "HTTPSampler.protocol", sampler.getProtocol())
-                        //         stringProp(name: "HTTPSampler.contentEncoding", "")
-                        //         stringProp(name: "HTTPSampler.path", sampler.path)
-                        //         stringProp(name: "HTTPSampler.method", sampler.method.toUpperCase())
-                        //         boolProp(name: "HTTPSampler.follow_redirects", "true")
-                        //         boolProp(name: "HTTPSampler.auto_redirects", "false")
-                        //         boolProp(name: "HTTPSampler.use_keepalive", "true")
-                        //         boolProp(name: "HTTPSampler.DO_MULTIPART_POST", "false")
-                        //         boolProp(name: "HTTPSampler.monitor", "false")
-                        //         stringProp(name: "HTTPSampler.embedded_url_re", "")
-                        //         stringProp(name: "HTTPSampler.implementation", "Java")
-
-                        //     }
-                        //     hashTree() {
-                        //         if (sampler.jsonPPs) {
-                        //             sampler.jsonPPs.each { pp ->
-                        //                 JSONPostProcessor(guiclass: "JSONPostProcessorGui", testclass: "JSONPostProcessor", testname: "JSON Extractor", enabled: "true") {
-                        //                     stringProp(name: "JSONPostProcessor.referenceNames", pp.key)
-                        //                     stringProp(name: "JSONPostProcessor.jsonPathExprs", pp.value)
-                        //                 }
-                        //             }
-                        //             hashTree()
-                        //         }
-                        //         if (withHttpHeaders && sampler.headers) {
-                        //             HeaderManager(guiclass: "HeaderPanel", testclass: "HeaderManager", testname: "HTTP Header Manager", enabled: "true") {
-                        //                 collectionProp(name: "HeaderManager.headers") {
-                        //                     sampler.headers.each { header ->
-                        //                         elementProp(name: "", elementType: "Header") {
-                        //                             stringProp(name: "Header.name", header.key)
-                        //                             stringProp(name: "Header.value", header.value)
-                        //                         }
-                        //                     }
-                        //                 }
-                        //             }
-                        //             hashTree()
-                        //         }
-                        //     }
-                        // }
                     }
                 }
             }
