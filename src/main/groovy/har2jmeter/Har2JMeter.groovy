@@ -48,6 +48,15 @@ class Har2JMeter {
             }
             if(block.condition){
                 bl.condition = "\${__javaScript(" + block.condition + ")}"
+            } else if(block.loopCount) {
+                bl.loopCount = block.loopCount
+                if (block.loopData) {
+                    bl.loopData = block.loopData
+                    bl.repeatData = false
+                    if (block.repeatData) {
+                        bl.repeatData = block.repeatData
+                    }
+                }
             }
             jmeterBlocks.add(bl)
         }
@@ -172,13 +181,33 @@ class Har2JMeter {
                     }
                     hashTree() {
                         jmeterBlocks.each { block -> 
-                            if(block.condition) {
-                                IfController(guiclass: "IfControllerPanel", testclass: "IfController", testname: "If Controller") {
-                                    stringProp(name: "IfController.condition", block.condition)
-                                    boolProp(name: "IfController.evaluateAll", false)
-                                    boolProp(name: "IfController.useExpression", true)
+                            if(block.condition || block.loopCount) {
+                                if (block.condition) {
+                                    IfController(guiclass: "IfControllerPanel", testclass: "IfController", testname: "If Controller") {
+                                        stringProp(name: "IfController.condition", block.condition)
+                                        boolProp(name: "IfController.evaluateAll", false)
+                                        boolProp(name: "IfController.useExpression", true)
+                                    }
+                                } else {
+                                    LoopController(guiclass: "LoopControlPanel", testclass: "LoopController", testname: "Loop Controller") {
+                                        intProp(name: "LoopController.loops", block.loopCount)
+                                    }
                                 }
                                 hashTree() {
+                                    if (block.loopData) {
+                                        CSVDataSet(guiclass: "TestBeanGUI", testclass: "CSVDataSet", testname: "CSV Data Set Config") {
+                                            stringProp(name: "filename", block.loopData)
+                                            stringProp(name: "fileEncoding")
+                                            stringProp(name: "variableNames")
+                                            boolProp(name: "ignoreFirstLine", false)
+                                            stringProp(name: "delimiter",",")
+                                            boolProp(name: "quotedData", false)
+                                            boolProp(name: "recycle", block.repeatData)
+                                            boolProp(name: "stopThread", !block.repeatData)
+                                            stringProp(name: "shareMode", "shareMode.all")
+                                        }
+                                        hashTree()
+                                    }
                                     block.jmeterSamplers.each { sampler ->
                                         HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
                                             elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {

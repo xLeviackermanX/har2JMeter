@@ -34,6 +34,9 @@ class JMeterHttpSampler {
 
 class JMeterBlock {
     String condition
+    int loopCount
+    String loopData
+    Boolean repeatData
     // JMeterHttpSampler[] jmeterSamplers;
     List <JMeterHttpSampler> jmeterSamplers
 }
