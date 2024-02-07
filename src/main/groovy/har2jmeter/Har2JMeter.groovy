@@ -244,8 +244,8 @@ class Har2JMeter {
                                                         stringProp(name: "JSONPostProcessor.referenceNames", pp.key)
                                                         stringProp(name: "JSONPostProcessor.jsonPathExprs", pp.value)
                                                     }
+                                                    hashTree()
                                                 }
-                                                hashTree()
                                             }
                                             if (withHttpHeaders && sampler.headers) {
                                                 HeaderManager(guiclass: "HeaderPanel", testclass: "HeaderManager", testname: "HTTP Header Manager", enabled: "true") {
