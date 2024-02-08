@@ -15,9 +15,24 @@ class Har2JMeter {
         }
         def jmeterBlocks = []
         def jmeterSamplers = []
+        def threadGroup = new ThreadGroup(loopCount: 1, users: 1, name: "thread-group")
         def jsonSlurper = new JsonSlurper()
         def har = jsonSlurper.parse(new FileReader(harFile))
-
+        if (har.test.threadGroup?.users) {
+            threadGroup.users = har.test.threadGroup?.users
+        }
+        if (har.test.threadGroup?.rampUpTime) {
+            threadGroup.rampUpTime = har.test.threadGroup?.rampUpTime
+        }
+        if (har.test.threadGroup?.duration) {
+            threadGroup.duration = har.test.threadGroup?.duration
+        }
+        if (har.test.threadGroup?.loopCount) {
+            threadGroup.loopCount = har.test.threadGroup?.loopCount
+        } 
+        if (har.test.threadGroup?.name) {
+            threadGroup.name = har.test.threadGroup?.name
+        }
         har.test.threadGroup.blocks.each { block ->
             // def jmeterSamplers = []
             JMeterBlock bl = new JMeterBlock(jmeterSamplers: new ArrayList<>())
@@ -28,14 +43,21 @@ class Har2JMeter {
                     if (request) {
                         URL url = new URL(request.url)
                         JMeterHttpSampler sampler = new JMeterHttpSampler(url: url, method: request.method)
+                        sampler.name = sampler.getPath()
                         request?.headers?.each { header ->
                             sampler.headers[header.name] = header.value
                         }
                         request?.jsonPostProcessors?.each {pp ->
                             sampler.jsonPPs[pp.referenceNames] = pp.jsonPathExprs
                         }
+                        request?.xpathPostProcessors?.each {pp -> 
+                            sampler.xmlPPs[pp.referenceNames] = pp.xpathQuery
+                        }
                         if(request?.postData) {
                             sampler.postData = request.postData.text
+                        }
+                        if(request?.name) {
+                            sampler.name = request.name
                         }
                         request.queryString?.each { param ->
                             sampler.arguments[param.name] = param.value
@@ -87,70 +109,11 @@ class Har2JMeter {
         // }
 
 
-        jmxFile.text = toJmx(jmeterBlocks)
+        jmxFile.text = toJmx(jmeterBlocks, threadGroup)
         println "The JMX file \"${jmxFile}\" was successful created."
     }
 
-    def getSamplers(jmeterSamplers) {
-        def writer = new StringWriter()
-        def xml = new MarkupBuilder(writer)
-        return jmeterSamplers.each { sampler ->
-            HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
-                elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {
-                    collectionProp(name: "Arguments.arguments") {
-                        if(sampler.postData) {
-                            elementProp(name: "", elementType: "HTTPArgument") {
-                                boolProp(name: "HTTPArgument.always_encode", "false")
-                                stringProp(name: "Argument.value", sampler.postData)
-                                stringProp(name: "Argument.metadata", "=")
-                            }                
-                        }     
-                    }
-                }
-                stringProp(name: "HTTPSampler.domain", sampler.domain)
-                stringProp(name: "HTTPSampler.port", sampler.getPort())
-                stringProp(name: "HTTPSampler.connect_timeout", "")
-                stringProp(name: "HTTPSampler.response_timeout", "")
-                stringProp(name: "HTTPSampler.protocol", sampler.getProtocol())
-                stringProp(name: "HTTPSampler.contentEncoding", "")
-                stringProp(name: "HTTPSampler.path", sampler.path)
-                stringProp(name: "HTTPSampler.method", sampler.method.toUpperCase())
-                boolProp(name: "HTTPSampler.follow_redirects", "true")
-                boolProp(name: "HTTPSampler.auto_redirects", "false")
-                boolProp(name: "HTTPSampler.use_keepalive", "true")
-                boolProp(name: "HTTPSampler.DO_MULTIPART_POST", "false")
-                boolProp(name: "HTTPSampler.monitor", "false")
-                stringProp(name: "HTTPSampler.embedded_url_re", "")
-                stringProp(name: "HTTPSampler.implementation", "Java")
-            }
-            hashTree() {
-                if (sampler.jsonPPs) {
-                    sampler.jsonPPs.each { pp ->
-                        JSONPostProcessor(guiclass: "JSONPostProcessorGui", testclass: "JSONPostProcessor", testname: "JSON Extractor", enabled: "true") {
-                            stringProp(name: "JSONPostProcessor.referenceNames", pp.key)
-                            stringProp(name: "JSONPostProcessor.jsonPathExprs", pp.value)
-                        }
-                    }
-                    hashTree()
-                }
-                if (withHttpHeaders && sampler.headers) {
-                    HeaderManager(guiclass: "HeaderPanel", testclass: "HeaderManager", testname: "HTTP Header Manager", enabled: "true") {
-                        collectionProp(name: "HeaderManager.headers") {
-                            sampler.headers.each { header ->
-                                elementProp(name: "", elementType: "Header") {
-                                    stringProp(name: "Header.name", header.key)
-                                    stringProp(name: "Header.value", header.value)
-                                }
-                            }
-                        }
-                    }
-                    hashTree()
-                }
-            }
-        }
-    }
-
-    def toJmx(jmeterBlocks) {
+    def toJmx(jmeterBlocks, threadGroup) {
         def writer = new StringWriter()
         def xml = new MarkupBuilder(writer)
         xml.jmeterTestPlan(version: "1.2", properties: "2.4", jmeter: "2.9") {
@@ -165,18 +128,22 @@ class Har2JMeter {
                     stringProp(name: "TestPlan.user_define_classpath")
                 }
                 hashTree() {
-                    ThreadGroup(guiclass: "ThreadGroupGui", testclass: "ThreadGroup", testname: "Thread-Gruppe", enabled: "true") {
+                    ThreadGroup(guiclass: "ThreadGroupGui", testclass: "ThreadGroup", testname: "${threadGroup.name}", enabled: "true") {
                         stringProp(name: "ThreadGroup.on_sample_error", "continue")
                         elementProp(name: "ThreadGroup.main_controller", elementType: "LoopController", guiclass: "LoopControlPanel", testclass: "LoopController", testname: "Schleifen-Controller (Loop Controller)", enabled: "true") {
                             boolProp(name: "LoopController.continue_forever", "false")
-                            stringProp(name: "LoopController.loops", "1")
+                            stringProp(name: "LoopController.loops", threadGroup.loopCount)
                         }
-                        stringProp(name: "ThreadGroup.num_threads", "1")
-                        stringProp(name: "ThreadGroup.ramp_time", "1")
+                        stringProp(name: "ThreadGroup.num_threads", threadGroup.users)
+                        stringProp(name: "ThreadGroup.ramp_time", threadGroup.rampUpTime)
                         longProp(name: "ThreadGroup.start_time", "1362062247000")
                         longProp(name: "ThreadGroup.end_time", "1362062247000")
                         boolProp(name: "ThreadGroup.scheduler", "false")
-                        stringProp(name: "ThreadGroup.duration", "")
+                        if (threadGroup?.duration) {
+                            stringProp(name: "ThreadGroup.duration", threadGroup.duration)
+                        } else {
+                            stringProp(name: "ThreadGroup.duration", "")
+                        }
                         stringProp(name: "ThreadGroup.delay", "")
                     }
                     hashTree() {
@@ -203,13 +170,13 @@ class Har2JMeter {
                                             stringProp(name: "delimiter",",")
                                             boolProp(name: "quotedData", false)
                                             boolProp(name: "recycle", block.repeatData)
-                                            boolProp(name: "stopThread", !block.repeatData)
+                                            boolProp(name: "stopThread", false)
                                             stringProp(name: "shareMode", "shareMode.all")
                                         }
                                         hashTree()
                                     }
                                     block.jmeterSamplers.each { sampler ->
-                                        HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
+                                        HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.name}", enabled: "true") {
                                             elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {
                                                 collectionProp(name: "Arguments.arguments") {
                                                     if(sampler.postData) {
@@ -247,6 +214,20 @@ class Har2JMeter {
                                                     hashTree()
                                                 }
                                             }
+                                            if (sampler.xmlPPs) {
+                                                sampler.xmlPPs.each { pp ->
+                                                    XPathExtractor(guiclass: "XPathExtractorGui", testclass: "XPathExtractor", testname: "XPath Extractor") {
+                                                        stringProp(name: "XPathExtractor.default")
+                                                        stringProp(name: "XPathExtractor.refname", pp.key)
+                                                        stringProp(name: "XPathExtractor.matchNumber", -1)
+                                                        stringProp(name: "XPathExtractor.xpathQuery", pp.value)
+                                                        boolProp(name: "XPathExtractor.validate", false)
+                                                        boolProp(name: "XPathExtractor.tolerant", false)
+                                                        boolProp(name: "XPathExtractor.namespace", false)
+                                                    }
+                                                    hashTree()
+                                                }
+                                            }
                                             if (withHttpHeaders && sampler.headers) {
                                                 HeaderManager(guiclass: "HeaderPanel", testclass: "HeaderManager", testname: "HTTP Header Manager", enabled: "true") {
                                                     collectionProp(name: "HeaderManager.headers") {
@@ -265,7 +246,7 @@ class Har2JMeter {
                                 }
                             } else {
                                 block.jmeterSamplers.each { sampler ->
-                                    HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.path}", enabled: "true") {
+                                    HTTPSamplerProxy(guiclass: "HttpTestSampleGui", testclass: "HTTPSamplerProxy", testname: "${sampler.name}", enabled: "true") {
                                         elementProp(name: "HTTPsampler.Arguments", elementType: "Arguments", guiclass: "HTTPArgumentsPanel", testclass: "Arguments", testname: "User Defined Variables", enabled: "true") {
                                             collectionProp(name: "Arguments.arguments") {
                                                 if(sampler.postData) {
@@ -299,6 +280,20 @@ class Har2JMeter {
                                                 JSONPostProcessor(guiclass: "JSONPostProcessorGui", testclass: "JSONPostProcessor", testname: "JSON Extractor", enabled: "true") {
                                                     stringProp(name: "JSONPostProcessor.referenceNames", pp.key)
                                                     stringProp(name: "JSONPostProcessor.jsonPathExprs", pp.value)
+                                                }
+                                                hashTree()
+                                            }
+                                        }
+                                        if (sampler.xmlPPs) {
+                                            sampler.xmlPPs.each { pp ->
+                                                XPathExtractor(guiclass: "XPathExtractorGui", testclass: "XPathExtractor", testname: "XPath Extractor") {
+                                                    stringProp(name: "XPathExtractor.default")
+                                                    stringProp(name: "XPathExtractor.refname", pp.key)
+                                                    stringProp(name: "XPathExtractor.matchNumber", -1)
+                                                    stringProp(name: "XPathExtractor.xpathQuery", pp.value)
+                                                    boolProp(name: "XPathExtractor.validate", false)
+                                                    boolProp(name: "XPathExtractor.tolerant", false)
+                                                    boolProp(name: "XPathExtractor.namespace", false)
                                                 }
                                                 hashTree()
                                             }

@@ -4,6 +4,8 @@ class JMeterHttpSampler {
 
     URL url
 
+    String name
+
     String method
 
     String postData
@@ -11,6 +13,8 @@ class JMeterHttpSampler {
     Map headers = [:]
 
     Map jsonPPs = [:]
+
+    Map xmlPPs = [:]
 
     Map arguments = [:]
 
@@ -39,4 +43,12 @@ class JMeterBlock {
     Boolean repeatData
     // JMeterHttpSampler[] jmeterSamplers;
     List <JMeterHttpSampler> jmeterSamplers
+}
+
+class ThreadGroup {
+    String name
+    int users
+    int rampUpTime
+    int duration
+    int loopCount
 }
